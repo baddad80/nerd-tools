@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<script src="initializeWasm.js"></script>
+<script src="PiComputer_wasm.js"></script>
+</head>
+<body>
+<input type="number" id="pi_digit" name="pi_digit" required="" pattern="[1-9]" title="Which digit of π would you like your browser to calculate for you?">
+
+<button onclick="calculate(pi_digit)">Calculate</button><br />
+
+<progress style="display: none;" id="calculation_progress"></progress>
+
+<h1 id="result"></h1>
+
+<!-- <script src="./PiComputer.js"></script> -->
+<script>
+    
+async function calculate() 
+{
+    var pi_digit_input = document.getElementsByName('pi_digit')[0];
+    var progressBar = document.getElementById('calculation_progress');
+    var resultElement = document.getElementById('result');
+
+    progressBar.style.display = 'block';
+    
+    //await awaitSleep(2000);
+    // var resultDigit = computeDigitValue( pi_digit_input.value );
+    const resultDigit = wasmModule.instance.exports.computeDigitValue( pi_digit_input.value );
+
+    progressBar.style.display = 'none';
+    
+    resultElement.innerText = "digit " + pi_digit_input.value + " is: " + resultDigit;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<script src="initializeWasm.js"></script>
+<script src="piComputer_wasm.js"></script>
+<script src="piComputer_js.js"></script>
+</head>
+<body>
+
+<input type="number" id="pi_digit_js" name="pi_digit_js" required="" pattern="[1-9]" title="Which digit of π would you like your browser to calculate for you?">
+
+<button onclick="startCalculation(pi_digit_js)">Calculate</button>
+
+<progress style="display: none;" id="calculation_progress_js"></progress>
+
+<span id="result_js"></span>
+
+<script id="worker_js" type="javascript/worker">
+
+    self.onmessage = function(e) {
+        let data = JSON.parse(e.data);
+
+        if( data.url )
+        {
+            importScripts( data.url + 'piComputer_js.js' );
+        }
+
+        if( data.digit )
+        {
+            let result = computeDigitValue( data.digit );
+            self.postMessage( result );
+        }
+      };
+
+</script>
+
+<script>
+
+    var blob_js = new Blob([document.querySelector('#worker_js').textContent ], { type: "text/javascript" })
+    function startCalculation (desiredDigit)
+    {
+        let resultElement = document.getElementById('result_js');
+        let progressBar = document.getElementById('calculation_progress_js');
+        let pi_digit_input = document.getElementsByName('pi_digit_js')[0].value;
+
+        resultElement.innerText = '';
+        progressBar.style.display = 'block';
+
+        let worker = new Worker(window.URL.createObjectURL(blob_js));
+        worker.onmessage = function(e) 
+        {          
+            progressBar.style.display = 'none';
+            resultElement.innerText = 'Digit ' + pi_digit_input + ' is: ' + e.data; 
+        }
+
+        let documentURL = document.location.href.replace(/[^/]*$/, '');
+        worker.postMessage(JSON.stringify({digit:desiredDigit.value, url:documentURL})); // Start the worker.
+    }
+
+</script>
+
+</body>
+</html>

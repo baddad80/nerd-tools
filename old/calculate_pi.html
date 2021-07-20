@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<script src="initializeWasm.js"></script>
+<script src="PiComputer_wasm.js"></script>
+<script src="PiComputer_js.js"></script>
+</head>
+<body>
+<input type="number" id="pi_digit_js" name="pi_digit_js" required="" pattern="[1-9]" title="Which digit of π would you like your browser to calculate for you?">
+
+<button onclick="startCalculation(pi_digit_js)">Calculate</button>
+
+<progress style="display: none;" id="calculation_progress_js"></progress>
+
+<h1 id="result_js"></h1>
+
+<script id="worker1" type="javascript/worker">
+
+    self.onmessage = function(e) {
+        var data = JSON.parse(e.data);
+
+        if( data.url )
+        {
+            var url = data.url.href;
+            var index = url.indexOf('calculate_pi.html');
+            if (index != -1) {
+                url = url.substring(0, index);
+            }
+            importScripts(url + 'PiComputer_js.js');
+        }
+
+        if( data.digit )
+        {
+            let result = computeDigitValue( data.digit );
+            self.postMessage(result);
+        }
+      };
+
+</script>
+
+<script>
+
+    var blob = new Blob([document.querySelector('#worker1').textContent ], { type: "text/javascript" })
+    function startCalculation (desiredDigit)
+    {
+        let resultElement = document.getElementById('result_js');
+        let progressBar = document.getElementById('calculation_progress_js');
+        let pi_digit_input = document.getElementsByName('pi_digit_js')[0];
+        let val = pi_digit_input.value;
+
+        resultElement.innerText = "";
+        progressBar.style.display = 'block';
+
+        var worker = new Worker(window.URL.createObjectURL(blob));
+        worker.onmessage = function(e) 
+        {
+            //log("Received: " + e.data);            
+            progressBar.style.display = 'none';
+            resultElement.innerText = "digit " + val + " is: " + e.data; 
+        }
+
+        worker.postMessage(JSON.stringify({digit:desiredDigit.value, url:document.location})); // Start the worker.
+    }
+
+</script>
+</body>
+</html>

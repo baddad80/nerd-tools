@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<script src="initializeWasm.js"></script>
+<script src="PiComputer_wasm.js"></script>
+<script src="PiComputer_js.js"></script>
+</head>
+<body>
+<input type="number" id="pi_digit_js" name="pi_digit_js" required="" pattern="[1-9]" title="Which digit of π would you like your browser to calculate for you?">
+
+<button onclick="startCalculation(pi_digit_js)">Calculate</button>
+
+<progress style="display: none;" id="calculation_progress_js"></progress>
+
+<h1 id="result_js"></h1>
+
+<script>
+
+
+    async function calculate_js( digit ) 
+    {
+        let promise = new Promise ( function(resolve, reject) {
+            let piDigit = await computeDigitValue( digit );
+            if( piDigit >= 0 && piDigit < 10 )
+            {
+                resolve( piDigit );
+            }
+            else
+            {
+                reject( "Invalid result!" );
+            }
+        } );
+        return promise;
+    };
+
+    function startCalculation ()
+    {
+        let progressBar = document.getElementById('calculation_progress_js');
+        let pi_digit_input = document.getElementsByName('pi_digit_js')[0];
+        let val = pi_digit_input.value;
+
+        progressBar.style.display = 'block';
+
+        calculate_js ( val ).then( function( result )
+        { 
+            progressBar.style.display = 'none';
+            let resultElement = document.getElementById('result_js');
+            resultElement.innerText = "digit " + val + " is: " + result;
+
+        } ).catch( function( error )
+        {
+            progressBar.style.display = 'none';
+            let resultElement = document.getElementById('result_js');
+            resultElement.innerText = "digit " + val + " can not be calculated! Error: " + error;
+        } );
+    }
+
+</script>
+</body>
+</html>

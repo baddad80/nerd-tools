@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<script src="initializeWasm.js"></script>
+<script src="piComputer_js.js"></script>
+</head>
+<body>
+
+<script>
+
+    var globalPathAdaption = '';
+
+</script>
+
+<h2>Javascript</h2>
+
+<script>
+
+function msToTimeString( duration )
+{
+    let milliseconds = Math.floor((duration % 1000)),
+    seconds = Math.floor((duration / 1000) % 60),
+    minutes = Math.floor((duration / (1000 * 60)) % 60),
+    hours = Math.floor((duration / (1000 * 60 * 60)) % 24);
+
+    let unitString = ( hours ? "h" : ( minutes ? "m" : ( seconds ? "s" : "ms" ) ) );
+
+    return ( hours ? hours + ":" : "" ) 
+            + ( minutes ? minutes + ":" : "" ) 
+            + ( seconds ? seconds + "." : "" ) 
+            + milliseconds
+            + " " + unitString;
+}
+
+</script>
+
+<input type="number" id="pi_digit_js" name="pi_digit_js" required="" pattern="[1-9]" title="Which digit of π would you like your browser to calculate for you?">
+
+<button onclick=startCalculation_js(pi_digit_js) id="calculate_button_js">Calculate</button>
+
+<progress style="display: none;" id="calculation_progress_js"></progress>
+
+<span id="result_js"></span>
+
+<script id="worker_js" type="javascript/worker">
+
+    function progress_js( progressValue, progressAmount )
+    {
+        //console.log('progress: ' + progressValue + ' of ' + progressAmount + " " + ( progressValue / progressAmount ) * 100 + ' %' );
+
+        self.postMessage( JSON.stringify( { progressValue:progressValue, progressAmount:progressAmount } ) );
+    }
+
+    self.onmessage = function( workerMessage ) 
+    {
+        let data = JSON.parse( workerMessage.data );
+
+        if( data.url )
+        {
+            importScripts( data.url + 'piComputer_js.js' );
+        }
+
+        if( data.digit )
+        {
+            let result = computeDigitValue( data.digit, progress_js/*callback*/ );
+            self.postMessage( JSON.stringify( { result:result } ) );
+        }
+    };
+
+</script>
+
+<script>
+
+    var startTime_js;
+    var blob_js = new Blob([document.querySelector('#worker_js').textContent ], { type: "text/javascript" })
+    var worker_js;
+
+    function cancelCalculation_js()
+    {
+        worker_js.terminate();
+
+        let calcButton = document.getElementById('calculate_button_js');
+        calcButton.innerText = 'Calculate';
+        calcButton.setAttribute('onclick','startCalculation_js(pi_digit_js)');
+
+        let progressBar = document.getElementById('calculation_progress_js');
+        progressBar.removeAttribute( 'max' );
+        progressBar.removeAttribute( 'value' );                
+        progressBar.style.display = 'none';        
+    }
+
+    function startCalculation_js( desiredDigit )
+    {        
+        let resultElement = document.getElementById('result_js');
+        let pi_digit_input = document.getElementsByName('pi_digit_js')[0].value;
+
+        if( pi_digit_input != parseInt( pi_digit_input ) )
+        {
+            resultElement.innerText = 'Illegal input!';
+            return;
+        }
+
+        let calcButton = document.getElementById('calculate_button_js');
+
+        let progressBar = document.getElementById('calculation_progress_js');
+
+
+        worker_js = new Worker(window.URL.createObjectURL(blob_js));
+
+        resultElement.innerText = '';
+        progressBar.removeAttribute( 'max' );
+        progressBar.removeAttribute( 'value' );        
+        progressBar.style.display = 'block';
+        calcButton.innerText = 'Cancel';
+        calcButton.setAttribute('onclick','cancelCalculation_js()');
+
+        worker_js.onmessage = function( workerMessage ) 
+        {   
+            let data = JSON.parse( workerMessage.data );
+
+            if( data.result )   // finished
+            {       
+                progressBar.setAttribute( 'max', 100 );
+                progressBar.setAttribute( 'value', 100 );                
+                progressBar.style.display = 'none';
+
+                let endTime_js = performance.now();
+
+                resultElement.innerText = 'Digit ' + pi_digit_input + ' is: ' + data.result + " ( " + msToTimeString( endTime_js - startTime_js ) + " )";
+
+                cancelCalculation_js();
+            }
+
+            if( data.progressValue && data.progressAmount )
+            {
+                progressBar.setAttribute( 'max', data.progressAmount );
+                progressBar.setAttribute( 'value', data.progressValue );
+            }
+        }
+
+        let documentURL = document.location.href.replace(/[^/]*$/, '');
+
+        startTime_js = performance.now();
+
+        worker_js.postMessage(JSON.stringify({digit:desiredDigit.value, url:documentURL+globalPathAdaption})); // Start the worker.
+    }
+
+</script>
+
+<h2>Web Assembly</h2>
+
+<input type="number" id="pi_digit_wasm" name="pi_digit_wasm" required="" pattern="[1-9]" title="Which digit of π would you like your browser to calculate for you?">
+
+<button onclick="startCalculation_wasm(pi_digit_wasm)" id="calculate_button_wasm">Calculate</button>
+
+<progress style="display: none;" id="calculation_progress_wasm"></progress>
+
+<span id="result_wasm"></span>
+
+<script id="worker_wasm" type="javascript/worker">
+
+    function progress( progressValue, progressAmount )
+    {
+        //console.log('progress: ' + progressValue + ' of ' + progressAmount + " " + ( progressValue / progressAmount ) * 100 + ' %' );
+
+        self.postMessage( JSON.stringify( { progressValue:progressValue, progressAmount:progressAmount } ) );
+    }
+
+    let imports = { progress };
+
+    self.onmessage = function( workerMessage ) 
+    {
+        let data = JSON.parse( workerMessage.data );
+        let wasmModule;
+
+        if( data.url )
+        {
+            importScripts( data.url + 'initializeWasm.js' );
+            wasmModule = wasmBrowserInstantiate( data.url + 'PiComputer.wasm', { env: imports } );
+
+            wasmModule.then( function( module ) 
+            {
+                if( data.digit )
+                {
+                    const result = module.instance.exports.computeDigitValue( data.digit );
+                    self.postMessage( JSON.stringify( { result:result } ) );
+                } 
+            } );
+        }
+      };
+
+</script>
+
+<script>
+
+    var blob_wasm = new Blob([document.querySelector('#worker_wasm').textContent ], { type: "text/javascript" })
+    var worker_wasm;
+    var startTime_wasm;
+
+    function cancelCalculation_wasm()
+    {
+        worker_wasm.terminate();
+
+        let calcButton = document.getElementById('calculate_button_wasm');
+        calcButton.innerText = 'Calculate';
+        calcButton.setAttribute('onclick','startCalculation_wasm(pi_digit_wasm)');
+
+        let progressBar = document.getElementById('calculation_progress_wasm');
+        progressBar.setAttribute( 'max', 100 );
+        progressBar.setAttribute( 'value', 100 );                
+        progressBar.style.display = 'none';
+    }
+
+    function startCalculation_wasm( desiredDigit )
+    {
+        let calcButton = document.getElementById('calculate_button_wasm');        
+        let resultElement = document.getElementById('result_wasm');
+        let progressBar = document.getElementById('calculation_progress_wasm');
+        let pi_digit_input = document.getElementsByName('pi_digit_wasm')[0].value;
+
+        if( pi_digit_input != parseInt( pi_digit_input ) )
+        {
+            resultElement.innerText = 'Illegal input!';
+            return;
+        }
+
+        resultElement.innerText = '';
+        progressBar.removeAttribute( 'max' );
+        progressBar.removeAttribute( 'value' );
+        progressBar.style.display = 'block';
+
+        calcButton.innerText = 'Cancel';
+        calcButton.setAttribute('onclick','cancelCalculation_wasm()');
+
+        worker_wasm = new Worker(window.URL.createObjectURL(blob_wasm));
+        worker_wasm.onmessage = function( workerMessage )
+        {   
+            let data = JSON.parse( workerMessage.data );
+
+            if( data.result ) // finished
+            {
+                progressBar.setAttribute( 'max', 100 );
+                progressBar.setAttribute( 'value', 100 );                
+                progressBar.style.display = 'none';
+
+                let endTime_wasm = performance.now();
+
+                resultElement.innerText = 'Digit ' + pi_digit_input + ' is: ' + data.result + " ( " + msToTimeString( endTime_wasm - startTime_wasm ) + " )"; 
+
+                cancelCalculation_wasm();
+            }
+
+            if( data.progressValue && data.progressAmount )
+            {
+                progressBar.setAttribute( 'max', data.progressAmount );
+                progressBar.setAttribute( 'value', data.progressValue );
+            }
+        }
+
+        let documentURL = document.location.href.replace(/[^/]*$/, '');
+
+        startTime_wasm = performance.now();
+
+        worker_wasm.postMessage(JSON.stringify({digit:desiredDigit.value, url:documentURL+globalPathAdaption})); // Start the worker.
+    }
+
+</script>
+
+
+
+<h2>Pi Digits</h2>
+
+
+<input type="number" id="pi_digit_display" name="pi_digit_display" required="" pattern="[1-9]" title="How many digits of π would you like your browser to calculate and display for you?">
+
+<button onclick="startCalculation_digit_display(pi_digit_display)" id='digit_display_button'>Calculate</button>
+
+<progress style="display: none;" id="calculation_progress_digit_display"></progress>
+
+<span id="result_digit_display" style="word-wrap: break-word;"></span>
+
+<script id="worker_digit_display" type="javascript/worker">
+
+    function progress_digit_display( progressValue, progressAmount )
+    {
+        //console.log('progress: ' + progressValue + ' of ' + progressAmount + " " + ( progressValue / progressAmount ) * 100 + ' %' );
+
+        self.postMessage( JSON.stringify( { progressValue:progressValue, progressAmount:progressAmount } ) );
+    }
+
+    self.onmessage = function( workerMessage ) 
+    {
+        let data = JSON.parse( workerMessage.data );
+
+        if( data.url )
+        {
+            importScripts( data.url + 'piComputer_js.js' );
+        }
+
+        if( data.digit )
+        {
+            for ( let i = 1; i <= Number(data.digit); ++i )
+            {          
+                //console.log("i: "+i);
+                let result = computeDigitValue( String(i), progress_digit_display/*callback*/ );
+                self.postMessage( JSON.stringify( { result:result } ) );
+            }
+        }
+    };
+
+</script>
+
+<script>
+
+    var startTime_digit_display;
+    var blob_digit_display = new Blob([document.querySelector('#worker_digit_display').textContent ], { type: "text/javascript" })
+    var worker_digit_display;
+
+    function cancelCalculation_digit_display()
+    {
+        worker_digit_display.terminate();
+
+        let calcButton = document.getElementById('digit_display_button');
+        calcButton.innerText = 'Calculate';
+        calcButton.setAttribute('onclick','startCalculation_digit_display(pi_digit_display)');
+
+        let progressBar = document.getElementById('calculation_progress_digit_display');
+        progressBar.removeAttribute( 'max' );
+        progressBar.removeAttribute( 'value' );        
+        progressBar.style.display = 'none';             
+    }
+
+    function startCalculation_digit_display( desiredDigit )
+    {
+        let calcButton = document.getElementById('digit_display_button');
+        let resultElement = document.getElementById('result_digit_display');
+        let progressBar = document.getElementById('calculation_progress_digit_display');
+        let pi_digit_input = document.getElementsByName('pi_digit_display')[0].value;
+
+        if( pi_digit_input != parseInt( pi_digit_input ) )
+        {
+            resultElement.innerText = 'Illegal input!';
+            return;
+        }
+
+        resultElement.innerText = '3.';
+        progressBar.removeAttribute( 'max' );
+        progressBar.removeAttribute( 'value' );        
+        progressBar.style.display = 'block';
+        
+        calcButton.innerText = 'Cancel';
+        calcButton.setAttribute('onclick','cancelCalculation_digit_display()');
+
+        worker_digit_display = new Worker(window.URL.createObjectURL(blob_digit_display));
+        worker_digit_display.onmessage = function( workerMessage ) 
+        {   
+            let data = JSON.parse( workerMessage.data );
+
+            if( data.result || data.result == 0 )
+            {       
+                let endTime_digit_display = performance.now();
+
+                resultElement.innerText =  resultElement.innerText + data.result;
+
+                let oldValue = progressBar.getAttribute( 'value' );
+                ++oldValue;
+                progressBar.setAttribute( 'value', oldValue );
+
+                //console.log(oldValue);
+
+                if( desiredDigit.value == oldValue )    // finished
+                {
+                    progressBar.removeAttribute( 'max' );
+                    progressBar.removeAttribute( 'value' );        
+                    progressBar.style.display = 'none';           
+                    
+                    cancelCalculation_digit_display();
+                }
+            }
+
+            if( data.progressValue && data.progressAmount )
+            {
+                // no single digit calc progress for now
+            }
+        }
+
+        let documentURL = document.location.href.replace(/[^/]*$/, '');
+
+        progressBar.setAttribute( 'max', desiredDigit.value );
+        progressBar.setAttribute( 'value', 0 );
+
+        startTime_digit_display = performance.now();
+
+        worker_digit_display.postMessage(JSON.stringify({digit:desiredDigit.value, url:documentURL+globalPathAdaption})); // Start the worker.
+    }
+
+</script>
+
+</body>
+</html>
